@@ -1,0 +1,72 @@
+{
+  "version": 1,
+  "active": "cross_dot",
+  "visible": true,
+  "monitor": "primary",
+  "overrides": {
+    "color": "#00FF00",
+    "opacity": 1.0,
+    "scale": 1.0
+  },
+  "custom_presets": {
+    "_example_dot_cross": {
+      "color": "#00FF88",
+      "opacity": 0.9,
+      "scale": 1.0,
+      "rotation_deg": 0.0,
+      "offset": [0.0, 0.0],
+      "outline": {
+        "enabled": true,
+        "color": "#000000",
+        "opacity": 0.55,
+        "width": 1.0
+      },
+      "shapes": [
+        { "kind": "line", "from": [-20.0, 0.0], "to": [-4.0, 0.0], "width": 2.0 },
+        { "kind": "line", "from": [4.0, 0.0], "to": [20.0, 0.0], "width": 2.0 },
+        { "kind": "line", "from": [0.0, -20.0], "to": [0.0, -4.0], "width": 2.0 },
+        { "kind": "line", "from": [0.0, 4.0], "to": [0.0, 20.0], "width": 2.0 },
+        { "kind": "dot", "radius": 1.5 }
+      ]
+    },
+    "_example_group_chevron": {
+      "color": "#FF3B30",
+      "opacity": 0.85,
+      "scale": 1.5,
+      "rotation_deg": 0.0,
+      "offset": [0.0, 0.0],
+      "outline": {
+        "enabled": true,
+        "color": "#000000",
+        "opacity": 0.6,
+        "width": 1.0
+      },
+      "shapes": [
+        {
+          "kind": "group",
+          "rotation_deg": 0.0,
+          "translate": [0.0, 0.0],
+          "scale": 1.0,
+          "shapes": [
+            {
+              "kind": "polygon",
+              "closed": false,
+              "filled": false,
+              "width": 2.0,
+              "points": [[-10.0, -6.0], [0.0, 3.0], [10.0, -6.0]]
+            },
+            {
+              "kind": "arc",
+              "center": [0.0, 0.0],
+              "radius": 16.0,
+              "start_deg": 45.0,
+              "sweep_deg": 90.0,
+              "width": 2.0,
+              "cap": "round"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

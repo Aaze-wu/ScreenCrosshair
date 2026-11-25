@@ -1,0 +1,25 @@
+[package]
+name = "screencrosshair"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+eframe = "0.35.0"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+tiny-skia = "0.12.0"
+# 只为了 `EventLoopBuilderExtWindows::with_any_thread`：
+# 设置窗口跑在独立线程里，而 winit 默认禁止在主线程之外建事件循环。
+# 版本必须与 eframe 内部依赖完全一致，否则是两份不同的 crate，trait 匹配不上。
+winit = "0.30.13"
+windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging", "Win32_UI_Shell", "Win32_UI_HiDpi", "Win32_Graphics_Gdi", "Win32_System_LibraryLoader", "Win32_System_Registry", "Win32_System_Threading", "Win32_System_DataExchange", "Win32_Storage_FileSystem", "Win32_UI_Input_KeyboardAndMouse", "Win32_Security"] }
+
+# 常驻后台的小工具，优先体积与启动速度。LTO + 单编译单元能砍掉一半以上体积。
+# 不开 panic = "abort"：托盘/热键所在的 Win32 回调里有 catch_unwind 兜底，
+# abort 会让 panic 直接杀掉整个进程而不是回退到一个可用状态。
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
+

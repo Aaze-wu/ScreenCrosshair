@@ -1,0 +1,11 @@
+// ScreenCrosshair 的 exe 图标资源。
+//
+// 唯一的资源是图标本身：编号用最小的 1，资源管理器、任务栏、Alt+Tab 和
+// 「文件属性」都取编号最小的那个图标。
+//
+// 图标由代码生成（src/platform/icon.rs），改形状之后记得重跑：
+//     cargo run --example mkicon
+//
+// 这个文件由 build.rs 用 rc.exe 编译。
+
+1 ICON "app.ico"
