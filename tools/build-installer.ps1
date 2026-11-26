@@ -96,3 +96,13 @@ if ($setup) {
     Write-Host ''
     Write-Host "安装包: $($setup.FullName)  ($mb MB)" -ForegroundColor Green
 }
+
+# ---- 单文件便携版 ----
+# 发布页同时提供「安装包」和「单文件」两个产物：exe 本身零运行时依赖
+# （MSVC 静态链接 + /MT 之外的 CRT 由系统提供），复制走双击就能跑。
+# 单独复制一份到 dist\ 并带上版本号，是为了两个产物名字能并排出现，
+# 用户不必猜「README 里说的 target\release\xxx.exe 到底是哪个」。
+$portable = Join-Path (Join-Path $root 'dist') "ScreenCrosshair-$ver-portable.exe"
+Copy-Item $exe $portable -Force
+$pmb = [math]::Round((Get-Item $portable).Length / 1MB, 2)
+Write-Host "单文件: $portable  ($pmb MB)" -ForegroundColor Green

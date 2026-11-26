@@ -15,6 +15,15 @@
 从 [Releases](https://github.com/Aaze-wu/ScreenCrosshair/releases) 下载
 `ScreenCrosshair-<版本>-setup.exe` 双击安装即可。
 
+发布页同时提供两个产物，按需要挑一个：
+
+| 文件 | 说明 |
+| --- | --- |
+| `ScreenCrosshair-<版本>-setup.exe` | 安装包：写开始菜单/桌面快捷方式、可选开机自启、带卸载程序 |
+| `ScreenCrosshair-<版本>-portable.exe` | 单文件：零运行时依赖，放到任意目录双击即用，不留安装痕迹 |
+
+单文件版和安装版是**同一个 exe**，区别只在有没有被安装程序接管（快捷方式、卸载项）。
+
 - 默认**按当前用户**安装到 `%LOCALAPPDATA%\Programs\ScreenCrosshair`，不需要管理员；
   安装向导里可以切成「所有用户」（那份装到 `Program Files`）。
 - 安装时如果程序正在运行，安装包会**请它自己退出**（调 `--quit`），不会弹
@@ -28,12 +37,16 @@
 powershell -ExecutionPolicy Bypass -File tools\build-installer.ps1
 ```
 
-它会先 `cargo build --release` 再调 Inno Setup 的 `ISCC.exe`，产物在 `dist\`。
+它会先 `cargo build --release` 再调 Inno Setup 的 `ISCC.exe`，两个产物都落在 `dist\`
+（`*-setup.exe` 安装包 + `*-portable.exe` 单文件）。
 需要 [Inno Setup](https://jrsoftware.org/isinfo.php) 6 或 7。版本号只写在 `Cargo.toml`
 里：`build.rs` 把它写进 exe 的 VERSIONINFO，`installer\ScreenCrosshair.iss` 再读回来，
 所以不会出现「exe 是 0.1.0、安装包写着 0.2.0」。
 
 ### 方式二：直接拿 exe
+
+发布页的 `ScreenCrosshair-<版本>-portable.exe` 就是这个东西，下载即用。
+想自己编：
 
 ```powershell
 cargo build --release

@@ -15,6 +15,8 @@
   网络失败、仓库未配置、已是新版都有独立状态与文案，不会把「没查成」显示成「有更新」。
 - **Inno Setup 安装包**：`installer/ScreenCrosshair.iss` + `tools/build-installer.ps1`，
   支持静默安装、开机自启任务、卸载时清理启动项链接。
+- **发布页同时提供两个产物**：`<版本>-setup.exe`（安装包）与 `<版本>-portable.exe`
+  （单文件，零运行时依赖，放任意目录双击即用）。两者是同一个 exe，只有是否被安装程序接管之别。
 - **构建期版本信息**：`build.rs` 生成 `VERSIONINFO` 资源，exe 的 `文件版本` 直接取自
   `Cargo.toml`，安装包再用 `GetStringFileInfo` 读取它——版本只有一处来源，
   不会出现「exe 是 0.1.0、安装包写着 0.2.0」。
