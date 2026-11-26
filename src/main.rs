@@ -37,6 +37,9 @@ fn main() -> ExitCode {
             "--validate" => action = Action::Validate,
             "--print" => action = Action::Print,
             "--list-presets" => action = Action::ListPresets,
+            // 安装包用这个把常驻实例叫走：覆盖层没有任务栏窗口，
+            // 安装程序本身无法通过关窗口的方式结束它。
+            "--quit" => action = Action::Quit,
             "--preview" => {
                 i += 1;
                 match args.get(i) {
@@ -69,6 +72,7 @@ fn main() -> ExitCode {
     match action {
         Action::Validate => validate(&path),
         Action::Print => print_effective(&path),
+        Action::Quit => quit_running_instance(),
         Action::ListPresets => {
             list_presets();
             ExitCode::SUCCESS
@@ -83,13 +87,57 @@ enum Action {
     Validate,
     Print,
     ListPresets,
+    Quit,
     Preview(PathBuf),
+}
+
+/// 让正在运行的实例退出（安装 / 升级前用）。
+///
+/// **没有实例在跑也算成功**：调用方（安装程序）关心的是「结束后它不在跑」，
+/// 而不是「它刚刚在跑」。所以这条命令永远返回 `SUCCESS`，只用输出区分两种情况。
+fn quit_running_instance() -> ExitCode {
+    #[cfg(windows)]
+    {
+        if screencrosshair::platform::single::signal_exit() {
+            println!("已通知 ScreenCrosshair 退出。");
+        } else {
+            println!("ScreenCrosshair 当前没有在运行。");
+        }
+        ExitCode::SUCCESS
+    }
+    #[cfg(not(windows))]
+    {
+        eprintln!("屏幕覆盖层只支持 Windows。");
+        ExitCode::FAILURE
+    }
 }
 
 /// 启动覆盖层与托盘（Windows 专用）。
 fn run_gui(config_path: Option<PathBuf>) -> ExitCode {
     #[cfg(windows)]
     {
+        // ---- 单实例 ----
+        // 放在这里而不是更早：`--validate` / `--print` 这些命令行模式可以随便
+        // 并行跑，只有「真的开一个常驻覆盖层」才需要互斥。
+        let _instance = match screencrosshair::platform::single::acquire() {
+            Ok(guard) => guard,
+            Err(screencrosshair::platform::single::AcquireError::AlreadyRunning) => {
+                // 用户双击图标的意图是「把程序叫出来」，所以要把老实例的设置
+                // 界面弹出来——静默退出会让用户以为双击没生效，然后继续双击。
+                if !screencrosshair::platform::single::signal_existing() {
+                    // 极端竞态：互斥体还在但窗口已经销毁（正在退出）。
+                    eprintln!("ScreenCrosshair 已经在一个实例中运行。");
+                }
+                return ExitCode::SUCCESS;
+            }
+            Err(err) => {
+                // 检测本身失败不该变成「不让你用程序」。
+                eprintln!("单实例检测失败，继续启动：{err}");
+                // 占位守卫：类型上要有个值，这个分支不持有任何句柄。
+                screencrosshair::platform::single::InstanceGuard::none()
+            }
+        };
+
         match screencrosshair::app::App::run(config_path) {
             Ok(()) => ExitCode::SUCCESS,
             Err(err) => {
@@ -120,6 +168,7 @@ fn print_help() {
                --print           打印当前生效的准星 JSON\n\
                --list-presets    列出内置预设\n\
                --preview <目录>  把每个预设渲染成 PNG 写到该目录\n\
+               --quit            让正在运行的实例退出（安装程序用）\n\
            -h, --help            显示帮助\n\
            -V, --version         显示版本\n\
          \n\

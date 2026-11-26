@@ -431,6 +431,129 @@ impl SettingsApp {
     ///
     /// 捕获态必须在绘制任何控件之前处理：这段代码一旦排到后面，键盘事件会先被
     /// TextEdit 之类的控件吃掉，热键就永远捕获不到（表现为「点了改键没反应」）。
+    /// 「关于 / 更新检测」区块。
+    ///
+    /// 三条原则写在这里，因为它最容易在以后被「顺手加个自动下载」破坏：
+    /// * **只提示，不下载**：把链接交给系统浏览器，程序自己绝不碰可执行文件；
+    /// * **联网是用户主动的行为**：启动时一次请求都不发，只有点「检查更新」才出去；
+    /// * **没配置也能用**：没有仓库坐标时按钮置灰并说明原因，而不是发一个
+    ///   注定 404 的请求然后报「检查更新失败」。
+    fn about_ui(&mut self, ui: &mut egui::Ui) {
+        ui.add_space(6.0);
+        egui::CollapsingHeader::new("关于 / 更新检测")
+            .id_salt("about_section")
+            .show(ui, |ui| {
+                let (state, slug) = match self.shared.lock() {
+                    Ok(s) => (
+                        s.update.clone(),
+                        crate::update::repo_slug(s.config.update_repo.as_deref()),
+                    ),
+                    Err(_) => (crate::update::UpdateState::Idle, None),
+                };
+
+                egui::Grid::new("about_grid")
+                    .num_columns(2)
+                    .spacing([12.0, 4.0])
+                    .show(ui, |ui| {
+                        ui.label("名称");
+                        ui.label("ScreenCrosshair");
+                        ui.end_row();
+
+                        ui.label("版本");
+                        ui.monospace(crate::update::current_version());
+                        ui.end_row();
+
+                        ui.label("构建");
+                        ui.label(format!(
+                            "{} / {}",
+                            std::env::consts::OS,
+                            std::env::consts::ARCH
+                        ));
+                        ui.end_row();
+
+                        ui.label("许可");
+                        // 与仓库根目录的 LICENSE 保持一致（AGPL-3.0）。
+                        // 这个字段最容易写成「默认的 MIT」，而写错许可证是个
+                        // 法律问题，不是文案问题。
+                        ui.label("AGPL-3.0");
+                        ui.end_row();
+
+                        ui.label("仓库");
+                        match slug.as_deref() {
+                            Some(s) => {
+                                ui.label(s);
+                            }
+                            None => {
+                                ui.label(
+                                    egui::RichText::new("未配置（配置项 update_repo）").weak(),
+                                );
+                            }
+                        }
+                        ui.end_row();
+
+                        ui.label("更新");
+                        let text = egui::RichText::new(state.describe());
+                        let text = if state.is_problem() {
+                            text.color(egui::Color32::from_rgb(0xE5, 0x4C, 0x3D))
+                        } else if state.is_newer() {
+                            text.color(egui::Color32::from_rgb(0x2E, 0xA0, 0x43))
+                        } else {
+                            text.weak()
+                        };
+                        ui.label(text);
+                        ui.end_row();
+                    });
+
+                ui.add_space(6.0);
+                let checking = matches!(state, crate::update::UpdateState::Checking);
+                let new_url = match &state {
+                    crate::update::UpdateState::Newer { url, .. } if !url.is_empty() => {
+                        Some(url.clone())
+                    }
+                    _ => slug.as_deref().map(crate::update::releases_url),
+                };
+
+                ui.horizontal(|ui| {
+                    if ui
+                        .add_enabled(
+                            slug.is_some() && !checking,
+                            egui::Button::new(if checking {
+                                "检查中…"
+                            } else {
+                                "检查更新"
+                            }),
+                        )
+                        .on_disabled_hover_text(if slug.is_some() {
+                            "上一次检查还没结束"
+                        } else {
+                            "没有配置仓库地址，无法检查"
+                        })
+                        .clicked()
+                    {
+                        crate::update::spawn_check(Arc::clone(&self.shared));
+                    }
+
+                    if ui
+                        .add_enabled(new_url.is_some(), egui::Button::new("打开发布页"))
+                        .on_disabled_hover_text("没有可用的链接")
+                        .clicked()
+                        && let Some(url) = new_url.as_deref()
+                        && let Err(err) = crate::platform::open_url(url)
+                    {
+                        self.toast = Some(err);
+                    }
+                });
+
+                ui.label(
+                    egui::RichText::new(
+                        "只在点按钮时联网查询 GitHub Releases，不会下载或安装任何东西。",
+                    )
+                    .weak()
+                    .small(),
+                );
+            });
+    }
+
     fn hotkeys_ui(&mut self, ui: &mut egui::Ui, config: &crate::config::Config) {
         use crate::config::HotkeyCombo;
 
@@ -1134,6 +1257,7 @@ impl eframe::App for SettingsApp {
                             });
 
                             self.hotkeys_ui(ui, &config);
+                            self.about_ui(ui);
                         });
                 });
             });

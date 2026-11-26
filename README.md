@@ -10,6 +10,31 @@
 
 ## 安装
 
+### 方式一：安装包（推荐）
+
+从 [Releases](https://github.com/Aaze-wu/ScreenCrosshair/releases) 下载
+`ScreenCrosshair-<版本>-setup.exe` 双击安装即可。
+
+- 默认**按当前用户**安装到 `%LOCALAPPDATA%\Programs\ScreenCrosshair`，不需要管理员；
+  安装向导里可以切成「所有用户」（那份装到 `Program Files`）。
+- 安装时如果程序正在运行，安装包会**请它自己退出**（调 `--quit`），不会弹
+  「请先关闭程序」——这个程序没有任务栏窗口，那种提示等于死路。
+- 自启项落在「启动」文件夹，不写注册表 `Run`（原因见下）。卸载时会一并清掉。
+- 卸载**不会**删你的设置（`%APPDATA%\ScreenCrosshair`），想连配置一起删就手动删这个目录。
+
+自己打包：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools\build-installer.ps1
+```
+
+它会先 `cargo build --release` 再调 Inno Setup 的 `ISCC.exe`，产物在 `dist\`。
+需要 [Inno Setup](https://jrsoftware.org/isinfo.php) 6 或 7。版本号只写在 `Cargo.toml`
+里：`build.rs` 把它写进 exe 的 VERSIONINFO，`installer\ScreenCrosshair.iss` 再读回来，
+所以不会出现「exe 是 0.1.0、安装包写着 0.2.0」。
+
+### 方式二：直接拿 exe
+
 ```powershell
 cargo build --release
 ```
@@ -25,6 +50,15 @@ cargo build --release
 > 表现就是「勾上又被弹回未勾选、下次开机不运行」。启动文件夹不受这类工具处理。
 > 老版本写过的注册表值会在下次开启/关闭自启时顺手清掉。
 
+### 只允许一个实例
+
+程序用命名互斥体（`Local\ScreenCrosshair.SingleInstance`）保证只跑一份：
+重复双击不会再开第二个覆盖层（那会导致两套全局热键抢注册、两个托盘图标、两层叠加的准星）。
+而且第二次双击**不会静默退出**——它会给已有实例投一条 `WM_APP` 消息，把设置界面弹出来，
+因为你双击图标的意图显然是「把程序叫出来」。
+
+`--validate` / `--print` 这些命令行模式不受限制，可以随便并行跑。
+
 ## 命令行
 
 | 参数 | 说明 |
@@ -35,6 +69,7 @@ cargo build --release
 | `--print` | 打印「实际生效」的准星描述（JSON） |
 | `--list-presets` | 列出所有预设名 |
 | `--preview <目录>` | 把每个预设渲染成 PNG（调试用） |
+| `--quit` | 让正在运行的实例退出（安装包用；没在运行也算成功） |
 | `--help` / `--version` | 帮助 / 版本 |
 
 ## 热键
@@ -215,6 +250,26 @@ cargo build --release
 
 关掉窗口只是**隐藏**，再打开是同一个窗口，配置状态不会丢。
 
+## 关于 / 更新检测
+
+设置界面底部的「关于 / 更新检测」可以显示版本、构建平台、生成日期，并手动查新版。
+
+**只提示，不下载。** 点「检查更新」时程序用 WinHTTP 接一次 GitHub Releases 的
+`latest` 接口，比对版本号；有新版的就显示绿色提示 + 「打开发布页」按钮，把链接
+交给系统默认浏览器。程序本身绝不下载、不执行、不替换任何东西——一个常驻的透明覆盖层
+没有理由去动自己的可执行文件。
+
+- **启动时不联网**：一次请求都不发，只有你点按钮才出去。
+- **不添依赖**：用系统自带的 WinHTTP，而不是 `reqwest`（后者带 tokio/rustls，体积会比程序本体还大）。
+- **不阻塞界面**：请求在后台线程跑，超时 5/8 秒，失败就当“查不到”，不弹错。
+
+仓库坐标默认是 `Aaze-wu/ScreenCrosshair`。想指向自己 fork 的仓库，两种办法：
+
+- 编译时：`$env:SCREENCROSSHAIR_REPO='你/仓库'; cargo build --release`
+- 运行时：在 `config.json` 里写 `"update_repo": "你/仓库"`（优先级更高，改完自动热重载）
+
+两处的值都会被校验（只接受恰好一段 `/`、字符集限于 `A-Za-z0-9._-`），非法值不会拿去发请求。
+
 ## 已知限制
 
 - **独占全屏（exclusive fullscreen）的游戏会遮住覆盖层。** 这是 Windows 的显示独占机制，
@@ -229,7 +284,7 @@ cargo build --release
 
 ```powershell
 cargo build            # 调试版（带控制台，能看到热键注册失败之类的日志）
-cargo test             # 73 个单测
+cargo test             # 90 个单测
 cargo clippy --all-targets
 ```
 
@@ -246,12 +301,20 @@ cargo clippy --all-targets
 渲染用 `tiny-skia` 做 CPU 矢量绘制，画进一块 DIB 后用 `UpdateLayeredWindow` 上传，
 所以窗口本身不需要处理 `WM_PAINT`。
 
-### 图标是怎么进 exe 的
+### 图标和版本号是怎么进 exe 的
 
 窗口图标（`ViewportBuilder::with_icon`）只影响**窗口**，管不到**文件本身**——exe 的图标
 只能来自 PE 的图标资源。所以 `build.rs` 会调 Windows SDK 的 `rc.exe` 把
 `assets/app.rc`＋`assets/app.ico` 编成 `.res`，再用 `cargo:rustc-link-arg-bins` 交给链接器。
 找不到 `rc.exe` 时只警告不失败（图标缺了顶多丑，不该让编译不过）。
+
+同一个 `build.rs` 还现生成一份 `version.rc`（`VERSIONINFO`），把 `Cargo.toml` 的
+`version` 写成 exe 的「文件版本 / 产品版本」。这样 `Cargo.toml` 是版本号唯一的真源：
+文件属性、关于界面、安装包三处都从它派生，不会对不上。
+
+> **一次只能给 `rc.exe` 传一个 `.rc`**。图标和版本虽然前后脚编译，但必须分成两次调用、
+> 两个 `.res`，再一起交给链接器；直接 `rc.exe a.rc b.rc` 会报
+> `fatal error RC1107: invalid usage`（而且只报“用法错”，不告诉你是文件名多了）。
 
 `assets/app.ico` 由 `examples/mkicon.rs` 生成（和运行时用的是同一份矢量绘制代码）：
 
@@ -279,6 +342,7 @@ cargo run --example mkicon
 | `diff.ps1` | 对比两张 PNG，输出变化像素数与包围盒 |
 | `clickthrough.ps1` | 验证覆盖层点击穿透（建一个测试窗口压在上面，看点击落到谁身上） |
 | `sendinput.ps1` | **合成热键的最小正确实现**（`SendInput` 版），`hotkey.ps1` 的核心 |
+| `build-installer.ps1` | 一步出安装包：`cargo build --release` + `ISCC.exe`，产物在 `dist\` |
 
 同一 PowerShell 会话里重复 `Add-Type` 同名类会报「类型名称已存在」而直接退出，
 脚本看上去就像「什么都没干」。所以这些脚本一律用独立进程跑：

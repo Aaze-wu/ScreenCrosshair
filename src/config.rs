@@ -441,6 +441,13 @@ pub struct Config {
     /// 用户自定义预设（JSON 图元脚本）
     #[serde(default)]
     pub custom_presets: BTreeMap<String, CrosshairSpec>,
+    /// 更新检测用的仓库坐标（`owner/repo`）。
+    ///
+    /// 留空就用编译期内置的值（见 `src/update.rs`）。把它放进配置而不是写死，
+    /// 是因为「仓库搬家了」这件事不该需要重新编译一个 exe。
+    /// 手改错了也不会出事：`is_slug` 会拒掉非法值，程序只是不做联网检查。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub update_repo: Option<String>,
 }
 
 fn config_version() -> u32 {
@@ -462,6 +469,7 @@ impl Default for Config {
             hotkeys_enabled: true,
             hotkeys: BTreeMap::new(),
             custom_presets: BTreeMap::new(),
+            update_repo: None,
         }
     }
 }
@@ -561,6 +569,17 @@ impl Config {
         // 让 `RegisterHotKey` 静默失败或把打字变成热键，直接丢掉。
         self.hotkeys
             .retain(|id, combo| (1..=MAX_HOTKEY_ID).contains(id) && combo.is_usable());
+        // 仓库坐标会被拼进 URL：非法值直接丢掉，界面会显示「未配置」而不是
+        // 拿一个拼坏的地址去请求。
+        let repo = self.update_repo.take().and_then(|slug| {
+            let slug = slug.trim().to_string();
+            if crate::update::is_slug(&slug) {
+                Some(slug)
+            } else {
+                None
+            }
+        });
+        self.update_repo = repo;
     }
 
     /// 在当前预设列表里前后循环。
@@ -1038,5 +1057,47 @@ mod tests {
         c.normalize();
         assert_eq!(c.hotkeys.len(), 1);
         assert!(c.hotkeys.contains_key(&5));
+    }
+
+    /// 只改颜色时，`effective()` 的几何部分必须**逐字段不变**。
+    ///
+    /// 这条用例和 `crosshair::tests::color_never_moves_the_crosshair` 配对：
+    /// 那条守「渲染不改位置」，这条守「叠加覆盖值时不串味」。`effective()` 里
+    /// 把偏移按尺寸除回去（`offset / scale`）之后才 `normalize()`，任何一处
+    /// 顺序写错都会让「换个颜色」顺手改掉位置，而这种现象在界面上极难归因。
+    #[test]
+    fn changing_color_keeps_geometry() {
+        let mut cfg = Config::default();
+        cfg.overrides.offset = Some([12.0, -7.0]);
+        cfg.overrides.scale = Some(1.75);
+        cfg.overrides.opacity = Some(0.8);
+
+        let before = cfg.effective();
+        cfg.overrides.color = Some("#FF3B30".to_string());
+        let after = cfg.effective();
+
+        assert_eq!(after.color, "#FF3B30", "颜色本身要变");
+        assert_eq!(before.offset, after.offset, "偏移被颜色改动了");
+        assert_eq!(before.scale, after.scale, "尺寸被颜色改动了");
+        assert_eq!(before.rotation_deg, after.rotation_deg);
+        assert_eq!(before.opacity, after.opacity);
+        assert_eq!(before.shapes, after.shapes, "图元被颜色改动了");
+    }
+
+    /// 所有内置 + 自定义预设都过一遍：换颜色后几何量完全一致。
+    #[test]
+    fn changing_color_keeps_geometry_for_every_preset() {
+        let mut cfg = Config::default();
+        cfg.overrides.offset = Some([-25.0, 40.0]);
+        for name in cfg.preset_names() {
+            cfg.active = name.clone();
+            let before = cfg.effective();
+            let offset_before = cfg.offset_px();
+            cfg.overrides.color = Some("#FFD60A".to_string());
+            let after = cfg.effective();
+            assert_eq!(before.offset, after.offset, "预设 {name} 的偏移变了");
+            assert_eq!(before.scale, after.scale, "预设 {name} 的尺寸变了");
+            assert_eq!(offset_before, cfg.offset_px(), "预设 {name} 的像素偏移变了");
+        }
     }
 }

@@ -8,6 +8,7 @@
     "opacity": 1.0,
     "scale": 1.0
   },
+  "update_repo": "Aaze-wu/ScreenCrosshair",
   "custom_presets": {
     "_example_dot_cross": {
       "color": "#00FF88",

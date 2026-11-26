@@ -1,1 +1,3 @@
+# 构建产物（cargo 输出、安装包输出）
 /target
+/dist

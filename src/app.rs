@@ -24,6 +24,7 @@ use crate::platform::monitor::{self, MonitorInfo};
 use crate::platform::overlay::{MessageWindow, Overlay};
 use crate::platform::tray::{Tray, TrayCommand, TrayState, WM_TRAY, taskbar_created_message};
 use crate::presets;
+use crate::update::UpdateState;
 
 /// 定时器 id：轮询配置文件是否被外部改动。
 const TIMER_POLL: usize = 1;
@@ -58,6 +59,8 @@ pub struct Shared {
     pub hotkeys_suspend: bool,
     /// 最近一条状态信息（错误或提示），供界面显示
     pub status: Option<String>,
+    /// 更新检测结果（后台线程写入，设置界面读取）
+    pub update: UpdateState,
 }
 
 impl Shared {
@@ -338,6 +341,9 @@ impl App {
             hotkeys_dirty: false,
             hotkeys_suspend: false,
             status: load_err,
+            // 启动时**不**联网：一个常驻覆盖层不该在每次开机时都发一次外部请求。
+            // 用户点到「关于」里的「检查更新」按钮才会真的出去查。
+            update: UpdateState::default(),
         }));
 
         // 覆盖层：只处理显示设置变化
@@ -390,6 +396,18 @@ impl App {
                     if hash != 0 && hash != s.file_hash {
                         s.reload_pending = true;
                     }
+                    Some(0)
+                }
+                // 又有人双击了图标：单实例检测把「被挤掉的那个进程」变成
+                // 一条消息打到这里，用户看到的就是设置界面被叫了出来。
+                crate::platform::single::WM_SHOW_SETTINGS => {
+                    s.settings_pending = true;
+                    Some(0)
+                }
+                // 安装 / 升级前安装程序会喊一声，让常驻覆盖层自己走人。
+                // 覆盖层没有任务栏窗口，这是唯一能让用户「不看见它也能关掉它」的路。
+                crate::platform::single::WM_EXIT => {
+                    s.quit = true;
                     Some(0)
                 }
                 // 资源管理器（重新）启动：任务栏里的托盘图标已随它一起消失，

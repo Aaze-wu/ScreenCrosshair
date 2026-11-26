@@ -8,6 +8,7 @@ pub mod hotkeys;
 pub mod icon;
 pub mod monitor;
 pub mod overlay;
+pub mod single;
 pub mod tray;
 
 use std::ffi::OsStr;
@@ -40,4 +41,39 @@ pub fn enable_per_monitor_dpi() -> bool {
 /// 取当前进程程序的完整路径。
 pub fn exe_path() -> Option<std::path::PathBuf> {
     std::env::current_exe().ok()
+}
+
+/// 用系统默认程序打开一个链接或文件。
+///
+/// 只用于「打开发布页」这类动作：**程序自己从不下载任何东西**，把链接交给
+/// 浏览器是唯一不会踩「静默替换可执行文件」这条红线的做法。
+///
+/// `ShellExecuteW` 的返回值是个 `HINSTANCE`，但语义是整数：大于 32 才算成功。
+pub fn open_url(url: &str) -> Result<(), String> {
+    use windows_sys::Win32::UI::Shell::ShellExecuteW;
+    use windows_sys::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+
+    // 只放行 http(s)：`ShellExecuteW` 也会执行 `file:///…exe`、`mailto:` 甚至
+    // 自定义协议，这个函数的输入来自网络返回体，不该有这种权力。
+    if !(url.starts_with("https://") || url.starts_with("http://")) {
+        return Err(format!("拒绝打开非 http(s) 链接：{url}"));
+    }
+    let verb = wide("open");
+    let target = wide(url);
+    let result = unsafe {
+        ShellExecuteW(
+            std::ptr::null_mut(),
+            verb.as_ptr(),
+            target.as_ptr(),
+            std::ptr::null(),
+            std::ptr::null(),
+            SW_SHOWNORMAL,
+        )
+    };
+    let code = result as isize;
+    if code > 32 {
+        Ok(())
+    } else {
+        Err(format!("打开链接失败（ShellExecuteW 返回 {code}）"))
+    }
 }

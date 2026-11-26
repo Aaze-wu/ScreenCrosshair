@@ -641,4 +641,69 @@ mod tests {
         let data = render_preview(&spec, 64, 1.0);
         assert_eq!(data.len(), 64 * 64 * 4);
     }
+
+    /// 换颜色**绝不能**改变准星的几何位置。
+    ///
+    /// 这条用例锁住一个用户报过、但实测复现不出来的现象：「切到红色后准星
+    /// 位置偏了」。渲染路径里颜色只走到 `Paint::set_color`，理论上不可能搬动
+    /// 图元——但「理论上」不够，因为一旦有人在 `make_style` 里顺手改个
+    /// 宽度或加个偏移，肉眼几乎看不出来，靠人工回归也发现不了。
+    ///
+    /// 比较的是**alpha 包围盒**（与颜色无关的形状足迹），所以任何颜色都不许
+    /// 让这个框动一个像素。
+    #[test]
+    fn color_never_moves_the_crosshair() {
+        let colors = [
+            "#00FF00", "#FF3B30", "#FFD60A", "#30D5C8", "#FFFFFF", "#000000", "#8B5CF6",
+        ];
+        for (preset, _) in presets::BUILTINS {
+            let base = presets::builtin(preset).unwrap();
+            let mut reference: Option<(u32, u32, u32, u32)> = None;
+            for color in colors {
+                let mut spec = base.clone();
+                spec.color = color.to_string();
+                // 纯色、不透明、带描边：确保每种颜色都画出完整的形状足迹，
+                // 否则「黑色贴在黑背景上」这类情况会退化成「没有像素」而漏检。
+                spec.opacity = 1.0;
+                spec.rotation_deg = 0.0;
+                spec.offset = [0.0, 0.0];
+                spec.outline.enabled = true;
+                spec.outline.opacity = 1.0;
+                spec.outline.width = 1.0;
+
+                let mut pixmap = Pixmap::new(200, 200).unwrap();
+                assert!(
+                    draw(&mut pixmap, &spec, (100.0, 100.0), 1.0),
+                    "预设 {preset} 颜色 {color} 什么都没画出来"
+                );
+                let got = bbox(&pixmap).unwrap_or_else(|| panic!("{preset}/{color} 无可见像素"));
+                match reference {
+                    None => reference = Some(got),
+                    Some(want) => assert_eq!(
+                        want, got,
+                        "预设 {preset} 换成 {color} 后包围盒从 {want:?} 变成 {got:?}"
+                    ),
+                }
+            }
+        }
+    }
+
+    /// 带偏移时，换颜色也必须给出**同一个**偏移量（而不是各偏各的）。
+    #[test]
+    fn color_keeps_the_same_offset() {
+        let base = presets::builtin("cross_dot").unwrap();
+        let bbox_at = |color: &str| {
+            let mut spec = base.clone();
+            spec.color = color.to_string();
+            spec.opacity = 1.0;
+            spec.offset = [17.0, -9.0];
+            let mut pixmap = Pixmap::new(200, 200).unwrap();
+            draw(&mut pixmap, &spec, (100.0, 100.0), 1.0);
+            bbox(&pixmap).unwrap()
+        };
+        let green = bbox_at("#00FF00");
+        for color in ["#FF3B30", "#3B82F6", "#000000"] {
+            assert_eq!(green, bbox_at(color), "颜色 {color} 改变了带偏移时的位置");
+        }
+    }
 }

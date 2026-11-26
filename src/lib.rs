@@ -9,6 +9,7 @@ pub mod color;
 pub mod config;
 pub mod crosshair;
 pub mod presets;
+pub mod update;
 
 #[cfg(windows)]
 pub mod app;

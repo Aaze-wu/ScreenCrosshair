@@ -1,7 +1,10 @@
 [package]
 name = "screencrosshair"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
+# 更新检测会去 GitHub 查 releases/latest。仓库定下来之后把这里改掉即可
+# （或者在构建时用 SCREENCROSSHAIR_REPO 环境变量覆盖，见 src/update.rs）。
+repository = "https://github.com/Aaze-wu/ScreenCrosshair"
 
 [dependencies]
 eframe = "0.35.0"
@@ -12,7 +15,7 @@ tiny-skia = "0.12.0"
 # 设置窗口跑在独立线程里，而 winit 默认禁止在主线程之外建事件循环。
 # 版本必须与 eframe 内部依赖完全一致，否则是两份不同的 crate，trait 匹配不上。
 winit = "0.30.13"
-windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging", "Win32_UI_Shell", "Win32_UI_HiDpi", "Win32_Graphics_Gdi", "Win32_System_LibraryLoader", "Win32_System_Registry", "Win32_System_Threading", "Win32_System_DataExchange", "Win32_Storage_FileSystem", "Win32_UI_Input_KeyboardAndMouse", "Win32_Security"] }
+windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging", "Win32_UI_Shell", "Win32_UI_HiDpi", "Win32_Graphics_Gdi", "Win32_System_LibraryLoader", "Win32_System_Registry", "Win32_System_Threading", "Win32_System_DataExchange", "Win32_Storage_FileSystem", "Win32_UI_Input_KeyboardAndMouse", "Win32_Security", "Win32_Networking_WinHttp"] }
 
 # 常驻后台的小工具，优先体积与启动速度。LTO + 单编译单元能砍掉一半以上体积。
 # 不开 panic = "abort"：托盘/热键所在的 Win32 回调里有 catch_unwind 兜底，

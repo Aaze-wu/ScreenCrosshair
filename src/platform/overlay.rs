@@ -375,6 +375,12 @@ unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wparam: usize, lparam: 
     }
 }
 
+/// 消息窗口的窗口类名。
+///
+/// 提成常量是因为单实例检测要靠 `FindWindowW` 找到已在运行的那个实例
+/// （见 [`crate::platform::single`]），两边写成同一个字符串才不会悄悄失联。
+pub const MSG_CLASS_NAME: &str = "ScreenCrosshairMsg";
+
 /// 生成一个纯占位的窗口，用来接收热键 / 托盘回调（覆盖层窗口本身是
 /// `WS_EX_TRANSPARENT` 的，虽然也能收消息，但单独一个隐藏窗口更清晰）。
 pub struct MessageWindow {
@@ -385,7 +391,7 @@ impl MessageWindow {
     pub fn new(callback: WndCallback) -> Result<Self, String> {
         unsafe {
             let hinstance = GetModuleHandleW(std::ptr::null());
-            let class_name = wide("ScreenCrosshairMsg");
+            let class_name = wide(MSG_CLASS_NAME);
             let wc = WNDCLASSW {
                 style: 0,
                 lpfnWndProc: Some(wnd_proc),
@@ -407,7 +413,7 @@ impl MessageWindow {
             let hwnd = CreateWindowExW(
                 WS_EX_TOOLWINDOW,
                 class_name.as_ptr(),
-                wide("ScreenCrosshairMsg").as_ptr(),
+                wide(MSG_CLASS_NAME).as_ptr(),
                 WS_POPUP,
                 0,
                 0,
